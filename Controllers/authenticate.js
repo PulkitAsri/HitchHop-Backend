@@ -37,12 +37,12 @@ exports.signup = (req, res) => {
         // put in cookie
         res.cookie("tokken", token, { expire: new Date() + 9999 });
         // send response to front end
-        const { _id, name, lastname, email, role, active_trip } = user;
+        const { _id, name, lastname, email, role, active_trip, phone_number } = user;
         res.status(200);
         res.json({
             success: true,
             token,
-            user: { _id, name: name + ' ' + lastname, email, role, active_trip },
+            user: { _id, name: name + ' ' + lastname, email, role, active_trip, phone_number },
         });
         
         return res
@@ -94,12 +94,12 @@ exports.signin = (req, res) => {
         res.cookie("tokken", token, { expire: new Date() + 9999 });
         
         // send response to front end
-        const { _id, name, lastname, email, role, active_trip } = user;
+        const { _id, name, lastname, email, role, active_trip, phone_number } = user;
         res.status(200);
         res.json({
             success: true,
             token,
-            user: { _id, name: name + ' ' + lastname, email, role, active_trip },
+            user: { _id, name: name + ' ' + lastname, email, role, active_trip, phone_number },
         });
         return res
     })
