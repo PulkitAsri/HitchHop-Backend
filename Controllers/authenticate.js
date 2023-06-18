@@ -135,6 +135,7 @@ exports.isSignedin = (req, res, next) => {
     //     res.statusMessage = "User not signed in";
     //     return res.status(401).end();
     // }
+    next()
 }
 
 

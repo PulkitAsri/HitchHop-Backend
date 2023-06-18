@@ -5,12 +5,36 @@ const { Client } = require("@googlemaps/google-maps-services-js");
 var polylineUtil = require('@mapbox/polyline');
 const mapsClient = new Client({});
 const { PolyUtil } = require("node-geometry-library");
+const { default: axios } = require("axios");
 dotenv.config()
 
 // const MS_PER_MINUTE = 60000;
 const offsetDurationInMinutes = 45;
 const pct = .3; // Percent of route points for source (others are checked for destination)
 const radiusOffset = 50;    //TODO: TUNE
+
+async function calculateTripDurationFromLatLng(source, destination, waypoints) {
+    const { lat: sourceLat, lng: sourceLng } = source;
+    const { lat: destLat, lng: destLng } = destination;
+
+    const sourceArg = `${sourceLat},${sourceLng}`;
+    const destinationArg = `${destLat},${destLng}`;
+    const waypointsParam = waypoints.map(waypoint => `${waypoint.lat},${waypoint.lng}`).join("|");
+
+    const requestUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${sourceArg}&destination=${destinationArg}&waypoints=${waypointsParam}&key=${process.env.MAPS_API_KEY}`;
+
+    try {
+        const response = await axios.get(requestUrl);
+        console.log('response', response.data)
+        const route = response.data.routes[0];
+        const duration = route.legs.reduce((acc, leg) => acc + leg.duration.value, 0);
+        console.log({ duration })
+        return { duration };
+    } catch (error) {
+        console.error("Error calculating trip duration:", error);
+        return { duration: null };
+    }
+}
 
 exports.activeTrip = (req, res) => {
     var riderArray = [];
@@ -55,15 +79,18 @@ exports.activeTrip = (req, res) => {
     });
 }
 
+// @Testing
 exports.drive = (req, res) => {
-    User.findById(req.auth._id, (err, user) => {
+    // User.findById(req.auth._id, (err, user) => {
+    User.findById(req.body.userId, (err, user) => {
         if (err)
             return res.status(500).end();
         if (user.active_trip == undefined || user.active_trip == null) {
             const tripObj = new Trip({
-                driver: req.auth._id,
-                source: req.body.src,
-                destination: req.body.dst,
+                // driver: req.auth._id,
+                driver: req.body.userId,
+                source: req.body.source,
+                destination: req.body.destination,
                 route: req.body.route,
                 dateTime: new Date(req.body.dateTime),
                 max_riders: req.body.max_riders,
@@ -89,6 +116,54 @@ exports.drive = (req, res) => {
             return res.status(400).end();
         }
     })
+}
+
+// @Testing
+exports.listTrips = async (req, res) => {
+    const { source, destination } = req.body;
+    const wayPoints = [source, destination]
+
+    const ans = []
+    Trip.find({
+        // completed: false,   //trip is active
+        // available_riders: true,
+        // date: {
+        //     $gte: startDateTime,
+        //     $lte: endDateTime
+        // },
+    }, async function (err, trips) {
+        if (err) {
+            res.statusMessage = "No matches found. No trips around your time.";
+            return res.status(400).end();
+        }
+        // console.log(trips)
+
+        await Promise.all(trips.map(async (trip) => {
+            const { source: driverSource, destination: driverDestination, driver } = trip;
+            console.log({ driverSource, driverDestination });
+
+            const riderTrip = await calculateTripDurationFromLatLng(source, destination, wayPoints);
+            const driverTrip = await calculateTripDurationFromLatLng(driverSource, driverDestination, []);
+
+            if (riderTrip.duration && driverTrip.duration) {
+                const detourTime = riderTrip.duration - driverTrip.duration;
+                ans.push({
+                    ...trip,
+                    detourTime,
+                    // Include other relevant trip information
+                });
+            } else {
+                console.log("ERROR");
+            }
+        }));
+        res.status(200)
+        res.json({
+            success: true,
+            trips: ans
+        });
+
+    })
+    return res
 }
 
 exports.ride = (req, res) => {
