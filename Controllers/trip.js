@@ -1,5 +1,6 @@
 const Trip = require("../Models/tripModel");
 const User = require("../Models/user");
+const RideRequest = require("../Models/rideRequest");
 const dotenv = require("dotenv");
 const { Client } = require("@googlemaps/google-maps-services-js");
 var polylineUtil = require('@mapbox/polyline');
@@ -264,6 +265,20 @@ exports.ride = (req, res) => {
         }
     })
 }
+
+exports.requestRide = async (req, res) => {
+    const { userId, tripId } = req.body;
+    try {
+        const newRideRequest = new RideRequest({
+            userId,
+            tripId,
+        });
+        const savedRideRequest = await newRideRequest.save();
+        res.status(200).json({ message: 'Ride request successful', rideRequest: savedRideRequest });
+    } catch (error) {
+        res.status(500).json({ error: 'An error occurred while creating the ride request' });
+    }
+};
 
 exports.cancelTrip = (req, res) => {
     User.findById(req.auth._id, (err, user) => {
