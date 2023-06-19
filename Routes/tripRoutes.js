@@ -6,7 +6,7 @@ const { drive, ride, cancelTrip, tripDone, tripHistory, activeTrip, isDriver, li
 
 router.post("/trip/drive", isSignedin, drive)  // Swagger Api done
 router.post("/trip/ride", isSignedin, ride)    //Swagger Api done
-router.get("/trip/listTrips", isSignedin, listTrips)
+router.post("/trip/listTrips", isSignedin, listTrips)
 router.delete("/trip", isSignedin, cancelTrip) // Swagger Api pending
 router.post("/trip/done", isSignedin, tripDone) // Swagger Api pending
 router.get("/trip/history", isSignedin, tripHistory)// Swagger Api pending

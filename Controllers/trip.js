@@ -36,50 +36,7 @@ async function calculateTripDurationFromLatLng(source, destination, waypoints) {
     }
 }
 
-exports.activeTrip = (req, res) => {
-    var riderArray = [];
-    User.findById(req.auth._id, (err, user) => {
-       
-       if (user.active_trip == undefined || user.active_trip == null) {
-            res.statusMessage = "No active trip";
-            return res.status(400).end();
-        }
-        Trip.findById(user.active_trip, (err, trip) => {
-
-            User.findById(trip.driver, (err, user_driver) => {
-                const riders = trip.riders;
-              
-                if(riders.length === 0){
-                    res.status(200).json({
-                        ...trip._doc,
-                        riders: riderArray,
-                        driver: user_driver.name + ' ' + user_driver.lastname
-                    })
-                }
-              
-                var i = 0;
-                riders.forEach(rider => {
-                    User.findById(rider, (err, user_rider) => {
-
-                        if (err)
-                            return res.status(500).end();
-                        riderArray.push(String(user_rider.name + ' ' + user_rider.lastname));
-                        i++;
-                        if (i == riders.length) {
-                            return res.status(200).json({
-                                ...trip._doc,
-                                riders: riderArray,
-                                driver: user_driver.name + ' ' + user_driver.lastname
-                            })
-                        }
-                    })
-                })
-            });
-        });
-    });
-}
-
-// @Testing
+// @Testing - done
 exports.drive = (req, res) => {
     // User.findById(req.auth._id, (err, user) => {
     User.findById(req.body.userId, (err, user) => {
@@ -118,15 +75,15 @@ exports.drive = (req, res) => {
     })
 }
 
-// @Testing
+// @Testing- done
 exports.listTrips = async (req, res) => {
     const { source, destination } = req.body;
     const wayPoints = [source, destination]
 
     const ans = []
     Trip.find({
-        // completed: false,   //trip is active
-        // available_riders: true,
+        completed: false,   //trip is active
+        available_riders: true,
         // date: {
         //     $gte: startDateTime,
         //     $lte: endDateTime
@@ -140,16 +97,17 @@ exports.listTrips = async (req, res) => {
 
         await Promise.all(trips.map(async (trip) => {
             const { source: driverSource, destination: driverDestination, driver } = trip;
-            console.log({ driverSource, driverDestination });
-
+            console.log({ driverSource, driverDestination, driver });
+            const driverDetails = await User.findById(driver)
+            console.log({ driverDetails });
             const riderTrip = await calculateTripDurationFromLatLng(source, destination, wayPoints);
             const driverTrip = await calculateTripDurationFromLatLng(driverSource, driverDestination, []);
-
             if (riderTrip.duration && driverTrip.duration) {
                 const detourTime = riderTrip.duration - driverTrip.duration;
                 ans.push({
-                    ...trip,
+                    ...trip._doc,
                     detourTime,
+                    driver: driverDetails,
                     // Include other relevant trip information
                 });
             } else {
@@ -164,6 +122,52 @@ exports.listTrips = async (req, res) => {
 
     })
     return res
+}
+
+
+//DONT SEE BENEATH THIS POINT
+
+exports.activeTrip = (req, res) => {
+    var riderArray = [];
+    User.findById(req.auth._id, (err, user) => {
+
+        if (user.active_trip == undefined || user.active_trip == null) {
+            res.statusMessage = "No active trip";
+            return res.status(400).end();
+        }
+        Trip.findById(user.active_trip, (err, trip) => {
+
+            User.findById(trip.driver, (err, user_driver) => {
+                const riders = trip.riders;
+
+                if (riders.length === 0) {
+                    res.status(200).json({
+                        ...trip._doc,
+                        riders: riderArray,
+                        driver: user_driver.name + ' ' + user_driver.lastname
+                    })
+                }
+
+                var i = 0;
+                riders.forEach(rider => {
+                    User.findById(rider, (err, user_rider) => {
+
+                        if (err)
+                            return res.status(500).end();
+                        riderArray.push(String(user_rider.name + ' ' + user_rider.lastname));
+                        i++;
+                        if (i == riders.length) {
+                            return res.status(200).json({
+                                ...trip._doc,
+                                riders: riderArray,
+                                driver: user_driver.name + ' ' + user_driver.lastname
+                            })
+                        }
+                    })
+                })
+            });
+        });
+    });
 }
 
 exports.ride = (req, res) => {
