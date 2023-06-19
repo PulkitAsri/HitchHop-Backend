@@ -12,11 +12,7 @@ const YAML = require("yamljs");
 const swaggerDocument = YAML.load('./swagger.yaml');
 
 
-
-const authRoutes = require("./Routes/authentication");
-const allusersRoutes = require("./Routes/allusersRoutes");
-//const userRoutes = require("./Routes/user.js");
-const tripRoutes = require("./Routes/tripRoutes");
+const apiRoutes = require("./Routes/routes");
 
 // import cookieparser from "cookie-parser";
 // import cors from "cors";
@@ -42,18 +38,12 @@ app.use(cookieparser())
 app.use(cors())
 
 //Routes
-app.use("/api", authRoutes);
-app.use("/api", allusersRoutes);
-//app.use("/api", userRoutes);
-app.use("/api", tripRoutes);
+app.use("/api", apiRoutes);
 app.use('/api-docs', swaggerUI.serve, swaggerUI.setup(swaggerDocument));
 
 app.listen(process.env.PORT || 8000, () => {
     console.log(`Listening on a port ${process.env.PORT || 8000}`);
 })
 
-
-
-    
 module.exports = app;
 // MongoDb connection
