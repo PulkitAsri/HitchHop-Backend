@@ -108,7 +108,7 @@ exports.listTrips = async (req, res) => {
                 const driverTrip = await calculateTripDurationFromLatLng(driverSource, driverDestination, []);
 
                 if (!_.isNil(riderTrip.duration) && !_.isNil(driverTrip.duration)) {
-                    const detourTime = Math.abs(riderTrip.duration - driverTrip.duration);
+                    const detourTime = Math.abs(riderTrip.duration - driverTrip.duration) / 60;
                     ans.push({
                         ...trip._doc,
                         detourTime,
