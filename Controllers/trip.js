@@ -28,10 +28,10 @@ async function calculateTripDurationFromLatLng(source, destination, waypoints) {
 
     try {
         const response = await axios.get(requestUrl);
-        console.log('response', response.data)
+        // console.log('response', response.data)
         const route = response.data.routes[0];
         const duration = route.legs.reduce((acc, leg) => acc + leg.duration.value, 0);
-        console.log({ duration })
+        // console.log({ duration })
         return { duration };
     } catch (error) {
         console.error("Error calculating trip duration:", error);
@@ -98,31 +98,36 @@ exports.listTrips = async (req, res) => {
             return res.status(400).end();
         }
         // console.log(trips)
+        try {
+            await Promise.all(trips.map(async (trip) => {
+                const { source: driverSource, destination: driverDestination, driver } = trip;
+                console.log({ driverSource, driverDestination, driver });
+                const driverDetails = await User.findById(driver)
+                console.log({ driverDetails });
+                const riderTrip = await calculateTripDurationFromLatLng(source, destination, wayPoints);
+                const driverTrip = await calculateTripDurationFromLatLng(driverSource, driverDestination, []);
 
-        await Promise.all(trips.map(async (trip) => {
-            const { source: driverSource, destination: driverDestination, driver } = trip;
-            console.log({ driverSource, driverDestination, driver });
-            const driverDetails = await User.findById(driver)
-            console.log({ driverDetails });
-            const riderTrip = await calculateTripDurationFromLatLng(source, destination, wayPoints);
-            const driverTrip = await calculateTripDurationFromLatLng(driverSource, driverDestination, []);
-            if (riderTrip.duration && driverTrip.duration) {
-                const detourTime = riderTrip.duration - driverTrip.duration;
-                ans.push({
-                    ...trip._doc,
-                    detourTime,
-                    driver: driverDetails,
-                    // Include other relevant trip information
-                });
-            } else {
-                console.log("ERROR");
-            }
-        }));
-        res.status(200)
-        res.json({
-            success: true,
-            trips: ans
-        });
+                if (!_.isNil(riderTrip.duration) && !_.isNil(driverTrip.duration)) {
+                    const detourTime = riderTrip.duration - driverTrip.duration;
+                    ans.push({
+                        ...trip._doc,
+                        detourTime,
+                        driver: driverDetails,
+                        // Include other relevant trip information
+                    });
+                } else {
+                    console.log("ERROR");
+                }
+            }));
+            res.status(200)
+            res.json({
+                success: true,
+                trips: ans
+            });
+        } catch (e) {
+            console.log({ error: e })
+            res.status(500).json({ msg: "some error in backene", error: e });
+        }
 
     })
     return res
