@@ -125,19 +125,173 @@ exports.listTrips = async (req, res) => {
     return res
 }
 
+exports.tripDone = (req, res) => {
+    User.findById(req.body.userId, (err, user) => {
+        // if (err)
+        //     return res.status(500).end();
+        // else {
+
+        if (user.active_trip == undefined || user.active_trip == null) {
+            res.statusMessage = "No active trip";
+            return res.status(400).end();
+        } else {
+            Trip.findById(user.active_trip, (err, trip) => {
+                // if (err)
+                //     return res.status(500).end();
+                // else {
+                trip.completed = true;
+                trip.save((err) => {    //1
+                    // if (err) {
+                    //     res.statusMessage = "Error in saving trip status.";
+                    //     return res.status(500).end();
+                    // }
+                });
+                user.trips.push(trip._id);
+                user.active_trip = null;
+                user.trip_role_driver = null;
+                user.save((err) => {    //2
+                    // if (err) {
+                    //     res.statusMessage = "Error in saving trip to table.";
+                    //     return res.status(500).end();
+                    // }
+                });
+                trip.riders.forEach(rider => {  //3
+                    User.findById(rider, (err, user_rider) => {
+                        // if (err)
+                        //     return res.status(500).end();
+                        // else {
+                        user_rider.trips.push(trip._id);
+                        user_rider.active_trip = null;
+                        user_rider.trip_role_driver = null;
+                        user_rider.save((err) => {
+                            // if (err) {
+                            //     //TODO: revert
+                            //     res.statusMessage = "Error in saving user data for a rider.";
+                            //     return res.status(500).end();
+                            // }
+                        })
+                        // }
+                    })
+                });
+                //POTENTIAL ISSUE (should not be since foreach is NOT async): Need to return 200 when 1, 2, 3 (all) are done
+                return res.status(200).end();
+                // }
+            })
+        }
+        // }
+    })
+}
+
+exports.cancelTrip = (req, res) => {
+    User.findById(req.body.userId, (err, user) => {
+        // if (err)
+        //     return res.status(500).end();
+        console.log({ user })
+        if (user.active_trip == undefined || user.active_trip == null) {
+            res.statusMessage = "No active trip";
+            return res.status(400).end();
+        } else {
+            Trip.findById(user.active_trip, (err, trip) => {
+                // if (err)
+                //     return res.status(500).end();
+                if (trip) {
+                    if (user.trip_role_driver) {
+                        trip.riders.forEach(rider => {  //3
+                            User.findById(rider, (err, user_rider) => {
+                                if (err)
+                                    return res.status(500).end();
+                                else {
+                                    user_rider.active_trip = null;
+                                    user_rider.trip_role_driver = null;
+                                    user_rider.save((err) => {
+                                        // if (err) {
+                                        //     //TODO: revert
+                                        //     res.statusMessage = "Error in saving user data for a rider.";
+                                        //     return res.status(500).end();
+                                        // }
+                                    })
+                                }
+                            })
+                        });
+                        trip.deleteOne((err) => {
+                            // if (err) {
+                            //     res.statusMessage = "Error in deleting trip object";
+                            //     return res.status(500).end();
+                            // }
+                        });
+                    } else {
+                        const riderIndex = trip.riders.indexOf(user._id);
+                        trip.waypoints.splice(riderIndex * 2, 2);
+                        mapsClient.directions({
+                            params: {
+                                origin: trip.source,
+                                destination: trip.destination,
+                                waypoints: trip.waypoints,
+                                drivingOptions: {
+                                    departureTime: new Date(trip.dateTime),  // for the time N milliseconds from now.
+                                },
+                                optimize: true,
+                                key: process.env.MAPS_API_KEY
+                            },
+                            timeout: 2000, // milliseconds
+                        })
+                            .then((r) => {
+                                const routeArray = polylineUtil.decode(r.data.routes[0].overview_polyline.points);
+                                trip.route = Object.values(routeArray)
+                                    .map(item => ({ lat: item[0], lng: item[1] }));
+                                trip.riders.splice(riderIndex);
+                                trip.available_riders = true;
+                                trip.save((err) => {
+                                    if (err)
+                                        return res.status(500).end();
+                                });
+                            })
+                            .catch((e) => {
+                                res.statusMessage = e.response.data.error_message;
+                                return res.status(400).end();
+                            });
+                    }
+                }
+                user.active_trip = null;
+                user.trip_role_driver = null;
+                user.save((err) => {
+                    // if (err) {
+                    //     res.statusMessage = "Error in saving user. Trip was deleted/modified.";
+                    //     return res.status(500).end();
+                    // }
+                    res.status(200).end();
+                    return res;
+                });
+            });
+        }
+    })
+}
+
+
+exports.tripHistory = (req, res) => {
+    User.findById(req.body.userId, (err, user) => {
+        Trip.find({ '_id': { $in: user.trips } }, (err, trips) => {
+            // if (err)
+            //     return res.status(500).end();
+            res.status(200).json(trips);
+            return res;
+        })
+        // }
+    })
+}
+
 
 //DONT SEE BENEATH THIS POINT
 
 exports.activeTrip = (req, res) => {
     var riderArray = [];
-    User.findById(req.auth._id, (err, user) => {
+    User.findById(req.userId, (err, user) => {
 
         if (user.active_trip == undefined || user.active_trip == null) {
             res.statusMessage = "No active trip";
             return res.status(400).end();
         }
         Trip.findById(user.active_trip, (err, trip) => {
-
             User.findById(trip.driver, (err, user_driver) => {
                 const riders = trip.riders;
 
@@ -280,161 +434,8 @@ exports.requestRide = async (req, res) => {
     }
 };
 
-exports.cancelTrip = (req, res) => {
-    User.findById(req.auth._id, (err, user) => {
-        // if (err)
-        //     return res.status(500).end();
-        if (user.active_trip == undefined || user.active_trip == null) {
-            res.statusMessage = "No active trip";
-            return res.status(400).end();
-        } else {
-            Trip.findById(user.active_trip, (err, trip) => {
-                // if (err)
-                //     return res.status(500).end();
-                if (trip) {
-                    if (user.trip_role_driver) {
-                        trip.riders.forEach(rider => {  //3
-                            User.findById(rider, (err, user_rider) => {
-                                if (err)
-                                    return res.status(500).end();
-                                else {
-                                    user_rider.active_trip = null;
-                                    user_rider.trip_role_driver = null;
-                                    user_rider.save((err) => {
-                                        // if (err) {
-                                        //     //TODO: revert
-                                        //     res.statusMessage = "Error in saving user data for a rider.";
-                                        //     return res.status(500).end();
-                                        // }
-                                    })
-                                }
-                            })
-                        });
-                        trip.deleteOne((err) => {
-                            // if (err) {
-                            //     res.statusMessage = "Error in deleting trip object";
-                            //     return res.status(500).end();
-                            // }
-                        });
-                    } else {
-                        const riderIndex = trip.riders.indexOf(user._id);
-                        trip.waypoints.splice(riderIndex * 2, 2);
-                        mapsClient.directions({
-                            params: {
-                                origin: trip.source,
-                                destination: trip.destination,
-                                waypoints: trip.waypoints,
-                                drivingOptions: {
-                                    departureTime: new Date(trip.dateTime),  // for the time N milliseconds from now.
-                                },
-                                optimize: true,
-                                key: process.env.MAPS_API_KEY
-                            },
-                            timeout: 2000, // milliseconds
-                        })
-                            .then((r) => {
-                                const routeArray = polylineUtil.decode(r.data.routes[0].overview_polyline.points);
-                                trip.route = Object.values(routeArray)
-                                    .map(item => ({ lat: item[0], lng: item[1] }));
-                                trip.riders.splice(riderIndex);
-                                trip.available_riders = true;
-                                trip.save((err) => {
-                                    if (err)
-                                        return res.status(500).end();
-                                });
-                            })
-                            .catch((e) => {
-                                res.statusMessage = e.response.data.error_message;
-                                return res.status(400).end();
-                            });
-                    }
-                }
-                user.active_trip = null;
-                user.trip_role_driver = null;
-                user.save((err) => {
-                    // if (err) {
-                    //     res.statusMessage = "Error in saving user. Trip was deleted/modified.";
-                    //     return res.status(500).end();
-                    // }
-                    res.status(200).end();
-                    return res;
-                });
-            });
-        }
-    })
-}
 
-exports.tripHistory = (req, res) => {
-    User.findById(req.auth._id, (err, user) => {
-        // if (err)
-        //     return res.status(500).end();
-        // else {
-            Trip.find({ '_id': { $in: user.trips } }, (err, trips) => {
-                // if (err)
-                //     return res.status(500).end();
-                res.status(200).json(trips);
-                return res;
-            })
-        // }
-    })
-}
 
-exports.tripDone = (req, res) => {
-    User.findById(req.auth._id, (err, user) => {
-        // if (err)
-        //     return res.status(500).end();
-        // else {
-            
-            if (user.active_trip == undefined || user.active_trip == null) {
-                res.statusMessage = "No active trip";
-                return res.status(400).end();
-            } else {
-                Trip.findById(user.active_trip, (err, trip) => {
-                    // if (err)
-                    //     return res.status(500).end();
-                    // else {
-                        trip.completed = true;
-                        trip.save((err) => {    //1
-                            // if (err) {
-                            //     res.statusMessage = "Error in saving trip status.";
-                            //     return res.status(500).end();
-                            // }
-                        });
-                        user.trips.push(trip._id);
-                        user.active_trip = null;
-                        user.trip_role_driver = null;
-                        user.save((err) => {    //2
-                            // if (err) {
-                            //     res.statusMessage = "Error in saving trip to table.";
-                            //     return res.status(500).end();
-                            // }
-                        });
-                        trip.riders.forEach(rider => {  //3
-                            User.findById(rider, (err, user_rider) => {
-                                // if (err)
-                                //     return res.status(500).end();
-                                // else {
-                                    user_rider.trips.push(trip._id);
-                                    user_rider.active_trip = null;
-                                    user_rider.trip_role_driver = null;
-                                    user_rider.save((err) => {
-                                        // if (err) {
-                                        //     //TODO: revert
-                                        //     res.statusMessage = "Error in saving user data for a rider.";
-                                        //     return res.status(500).end();
-                                        // }
-                                    })
-                                // }
-                            })
-                        });
-                        //POTENTIAL ISSUE (should not be since foreach is NOT async): Need to return 200 when 1, 2, 3 (all) are done
-                        return res.status(200).end();
-                    // }
-                })
-            }
-        // }
-    })
-}
 
 
 
