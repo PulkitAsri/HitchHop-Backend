@@ -104,11 +104,11 @@ exports.listTrips = async (req, res) => {
                 console.log({ driverSource, driverDestination, driver });
                 const driverDetails = await User.findById(driver)
                 console.log({ driverDetails });
-                const riderTrip = await calculateTripDurationFromLatLng(source, destination, wayPoints);
+                const riderTrip = await calculateTripDurationFromLatLng(driverSource, driverDestination, wayPoints);
                 const driverTrip = await calculateTripDurationFromLatLng(driverSource, driverDestination, []);
 
                 if (!_.isNil(riderTrip.duration) && !_.isNil(driverTrip.duration)) {
-                    const detourTime = riderTrip.duration - driverTrip.duration;
+                    const detourTime = Math.abs(riderTrip.duration - driverTrip.duration);
                     ans.push({
                         ...trip._doc,
                         detourTime,
