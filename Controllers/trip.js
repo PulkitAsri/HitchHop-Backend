@@ -1,3 +1,4 @@
+const _ = require('lodash');
 const Trip = require("../Models/tripModel");
 const User = require("../Models/user");
 const RideRequest = require("../Models/rideRequest");
@@ -8,6 +9,7 @@ const mapsClient = new Client({});
 const { PolyUtil } = require("node-geometry-library");
 const { default: axios } = require("axios");
 dotenv.config()
+
 
 // const MS_PER_MINUTE = 60000;
 const offsetDurationInMinutes = 45;
@@ -56,7 +58,8 @@ exports.drive = (req, res) => {
             tripObj.save((err, trip) => {
                 if (err) // TODO: ?Handle error coming due to not selecting all the required fields?
                     return res.status(500).end();
-                res.status(200).json(trip);
+                res.status(200).json({ trip, success: true });
+
                 user.active_trip = trip._id;
                 user.trip_role_driver = true;
                 user.save((err) => {
@@ -259,7 +262,10 @@ exports.cancelTrip = (req, res) => {
                     //     res.statusMessage = "Error in saving user. Trip was deleted/modified.";
                     //     return res.status(500).end();
                     // }
-                    res.status(200).end();
+                    res.status(200).json({
+                        success: true,
+                        trips: ans
+                    });
                     return res;
                 });
             });
@@ -279,9 +285,6 @@ exports.tripHistory = (req, res) => {
         // }
     })
 }
-
-
-//DONT SEE BENEATH THIS POINT
 
 exports.activeTrip = (req, res) => {
     var riderArray = [];
@@ -325,8 +328,59 @@ exports.activeTrip = (req, res) => {
     });
 }
 
-exports.ride = (req, res) => {
-    User.findById(req.auth._id, (err, user) => {
+//DONT SEE BENEATH THIS POINT
+
+exports.ride = async (req, res) => {
+    //body, tridId, userId
+    const { userId, tripId, source, destination } = req.body;
+
+    try {
+
+        const riderUser = await User.findById(userId);
+        // console.log({ riderUser })
+        const tripToJoin = await Trip.findById(tripId);
+        // console.log({ tripToJoin })
+
+        if (_.isNil(riderUser)) {
+            return res.status(400).json({
+                success: false,
+                msg: "no user found with this id"
+            })
+        }
+        if (_.isNil(tripToJoin)) {
+            return res.status(400).json({
+                success: false,
+                msg: "no trip found with this id"
+            })
+        }
+
+        const driverUserPk = tripToJoin.driver
+
+        tripToJoin.waypoints = [...tripToJoin.waypoints, source, destination];
+        tripToJoin.riders.push(userId);
+        tripToJoin.available_riders = !(tripToJoin.riders.length === tripToJoin.max_riders);
+
+        riderUser.active_trip = tripToJoin._id;
+        riderUser.trip_role_driver = false;
+
+        await tripToJoin.save();
+        res.status(200).json({
+            success: true,
+            msg: "successfully riding the trip",
+            updatedTrip: tripToJoin
+        })
+
+
+    } catch (error) {
+        console.log({ error })
+        res.status(500).json({ msg: 'An error occurred while creating the ride request', error });
+    }
+
+
+}
+
+exports.ride2 = (req, res) => {
+    User.findById(req.us, (err, user) => {
         // if (err)
         //     return res.status(500).end();
         if (user.active_trip == undefined || user.active_trip == null) {
@@ -433,10 +487,6 @@ exports.requestRide = async (req, res) => {
         res.status(500).json({ error: 'An error occurred while creating the ride request' });
     }
 };
-
-
-
-
 
 
 exports.isDriver = (req, res) => {
