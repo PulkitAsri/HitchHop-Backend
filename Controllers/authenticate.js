@@ -35,7 +35,7 @@ exports.signup = (req, res) => {
         new_user.save((err, user) => {
             if (err) {
                 res.statusMessage = "User with this email already exists";
-                return res.status(400).end({});
+                return res.status(400).end();
             }
             // create token and put in cookie
             const token = jwt.sign({ _id: user._id }, process.env.SECRET)
