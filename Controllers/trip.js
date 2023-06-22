@@ -269,7 +269,6 @@ exports.cancelTrip = (req, res) => {
                     // }
                     res.status(200).json({
                         success: true,
-                        trips: ans
                     });
                     return res;
                 });
