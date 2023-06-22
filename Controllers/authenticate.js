@@ -21,32 +21,46 @@ exports.signout = (req, res) => {
 }
 
 exports.signup = (req, res) => {
-    const error = validationResult(req)
-    if (!error.isEmpty()) {
-        res.statusMessage = error.array()[0].msg;
-        return res.status(422).end();
-    }
-    const new_user = new User(req.body);
-    new_user.save((err, user) => {
-        if (err) {
-            res.statusMessage = "User with this email already exists";
-            return res.status(400).end({});
+
+    try {
+        const { email, name, password, phone_number, lastname } = req.body
+
+        console.log('Signing up request body', req.body)
+        const error = validationResult(req)
+        if (!error.isEmpty()) {
+            res.statusMessage = error.array()[0].msg;
+            return res.status(422).end();
         }
-        // create token and put in cookie
-        const token = jwt.sign({ _id: user._id }, process.env.SECRET)
-        // put in cookie
-        res.cookie("tokken", token, { expire: new Date() + 9999 });
-        // send response to front end
-        const { _id, name, lastname, email, role, active_trip, phone_number } = user;
-        res.status(200);
+        const new_user = new User({ email, name, password, phone_number, lastname });
+        new_user.save((err, user) => {
+            if (err) {
+                res.statusMessage = "User with this email already exists";
+                return res.status(400).end({});
+            }
+            // create token and put in cookie
+            const token = jwt.sign({ _id: user._id }, process.env.SECRET)
+            // put in cookie
+            res.cookie("tokken", token, { expire: new Date() + 9999 });
+            // send response to front end
+            const { _id, name, lastname, email, role, active_trip, phone_number } = user;
+            res.status(200);
+            res.json({
+                success: true,
+                token,
+                user: { _id, name: name + ' ' + lastname, email, role, active_trip, phone_number },
+            });
+            return res
+        })
+    } catch (e) {
+        res.status(500);
         res.json({
-            success: true,
-            token,
-            user: { _id, name: name + ' ' + lastname, email, role, active_trip, phone_number },
-        });
-        
+            success: false,
+            msg: "Trouble signing up",
+            error: e
+        })
         return res
-    })
+    }
+
 
 }
 exports.delete_user =(req,res)=>{
